@@ -17,6 +17,10 @@ clean:	## Clean everything up, also deleting the kind cluster
 	-rm -f kind-config.yaml
 	-kind delete cluster --name coco
 
+configure-machine:	## Configure podman machine to use insecure registry
+	envsubst < insecure-registry.conf.tmpl \
+	| podman machine ssh 'cat > /etc/containers/registries.conf.d/insecure-registry.conf'
+
 help:	## This help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
