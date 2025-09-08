@@ -23,3 +23,10 @@ run                  Run the inferencing pod
 clean                Clean everything up, also deleting the kind cluster
 help                 This help
 #+end_src
+
+Note: when using a podman machine it needs space for an 8GB ramdisk in addition to the
+kubernetes pods.
+
+#+begin_src sh
+podman machine init --cpus 8 --memory 16384
+#+end_src
