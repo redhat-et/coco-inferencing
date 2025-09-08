@@ -1,0 +1,12 @@
+# -*- yaml -*-
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+featureGates:
+  ImageVolume: true
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."${REGISTRY}"]
+      endpoint = ["http://${REGISTRY}"]
+    [plugins."io.containerd.grpc.v1.cri".registry.configs."${REGISTRY}"]
+      insecure_skip_verify = true

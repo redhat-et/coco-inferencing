@@ -1,0 +1,25 @@
+* Confidential Inferencing
+
+Experimenting with encrypted model delivery into a confidential inferencing environment.
+
+** Approach
+
+Use an init container to copy the model image from a registry into ramdisk inside the
+confidential container.
+
+** Steps
+
+1. Run ~make kind~ to start a kind cluster
+2. Run ~make init-container~ to build the init-container image
+3. Run ~make run~ to run the inference pod
+
+** Usage
+
+#+begin_src sh
+% make
+kind                 Start a kind cluster
+init-container       Build the init container
+run                  Run the inferencing pod
+clean                Clean everything up, also deleting the kind cluster
+help                 This help
+#+end_src
