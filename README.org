@@ -17,10 +17,18 @@ confidential container.
 
 #+begin_src sh
 % make
+fetch                Fetch image from Huggingface
+oci                  Build OCI artifact for model
+push                 Push OCI artifact to registry
+gen-keys             Generate crypto keypair
+encrypt              Encrypt the model (registry -> registry)
+decrypt              Decrypt the modek (registry -> registry)
+pull                 Pull and extract model from registry
 kind                 Start a kind cluster
 init-container       Build the init container
 run                  Run the inferencing pod
 clean                Clean everything up, also deleting the kind cluster
+configure-machine    Configure podman machine to use insecure registry
 help                 This help
 #+end_src
 
@@ -29,4 +37,48 @@ kubernetes pods.
 
 #+begin_src sh
 podman machine init --cpus 8 --memory 16384
+#+end_src
+
+** Model packaging as OCI artifact
+
+*** Fetch model and package as OCI
+
+#+begin_src sh
+huggingface-cli download Qwen/Qwen3-0.6B --local-dir model
+
+modctl modelfile generate model
+modctl build -t tosh.lan:5000/qwen/qwen3-0.6b:latest -f Modelfile model
+modctl push --plain-http tosh.lan:5000/qwen/qwen3-0.6b:latest
+#+end_src
+
+*** Encrypt model with skopeo
+
+#+begin_src sh
+openssl genpkey -algorithm RSA -out private.pem -pkeyopt rsa_keygen_bits:4096
+openssl rsa -pubout -in private.pem -out public.pem
+
+skopeo copy --encryption-key jwe:public-key.pem \
+	docker://tosh.lan:5000/qwen/qwen3-0.6b:latest \
+	docker://tosh.lan:5000/qwen/qwen3-0.6b:encrypted
+#+end_src
+
+*** Decrypt model with skopeo
+
+#+begin_src sh
+skopeo copy --decryption-key private.pem \
+	docker://tosh.lan:5000/qwen/qwen3-0.6b:encrypted \
+	docker://tosh.lan:5000/qwen/qwen3-0.6b:decrypted
+#+end_src
+
+*** Unpack OCI into usable model
+
+#+begin_src sh
+modctl pull --extract-dir /ramdisk --extract-from-remote --plain-http \
+	tosh.lan:5000/qwen/qwen3-0.6b:decrypted
+#+end_src
+
+*** Serve model with vLLM
+
+#+begin_src sh
+vllm serve /ramdisk
 #+end_src
