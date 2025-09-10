@@ -3,10 +3,11 @@ MODEL=Qwen/Qwen3-0.6B
 MODEL_LC=$(shell echo $(MODEL) | tr '[:upper:]' '[:lower:]')
 MODCTL=modctl
 SKOPEO=skopeo
+HF=huggingface-cli
 export
 
 fetch:	## Fetch image from Huggingface
-	hf download $(MODEL) --local-dir model
+	$(HF) download $(MODEL) --local-dir model
 
 oci:	## Build OCI artifact for model
 	$(MODCTL) modelfile generate model
@@ -20,12 +21,12 @@ gen-keys:	## Generate crypto keypair
 	openssl rsa -pubout -in private.pem -out public.pem
 
 encrypt:	## Encrypt the model (registry -> registry)
-	$(SKOPEO) copy --encryption-key jwe:public-key.pem \
+	$(SKOPEO) copy --encryption-key jwe:public.pem \
 		docker://$(REGISTRY)/$(MODEL_LC):latest \
 		docker://$(REGISTRY)/$(MODEL_LC):encrypted
 
 decrypt:	## Decrypt the modek (registry -> registry)
-	$(SKOPEO) copy --decryption-key private-key.pem \
+	$(SKOPEO) copy --decryption-key private.pem \
 		docker://$(REGISTRY)/$(MODEL_LC):encrypted \
 		docker://$(REGISTRY)/$(MODEL_LC):decrypted
 
