@@ -67,18 +67,33 @@ skopeo copy --encryption-key jwe:public.pem \
 #+begin_src sh
 skopeo copy --decryption-key private.pem \
 	docker://tosh.lan:5000/qwen/qwen3-0.6b:encrypted \
-	docker://tosh.lan:5000/qwen/qwen3-0.6b:decrypted
+	dir:decrypted
 #+end_src
 
 *** Unpack OCI into usable model
 
-#+begin_src sh
-modctl pull --extract-dir /ramdisk --extract-from-remote --plain-http \
-	tosh.lan:5000/qwen/qwen3-0.6b:decrypted
+#+begin_src sh :results output
+mkdir ramdisk
+for layer in `jq -r '.layers[] | .digest' decrypted/manifest.json`
+do
+    tar xvf decrypted/${layer:7} -C ramdisk
+done
 #+end_src
+
+#+RESULTS:
+: config.json
+: generation_config.json
+: tokenizer.json
+: tokenizer_config.json
+: vocab.json
+: model.safetensors
+: LICENSE
+: README.md
+: merges.txt
 
 *** Serve model with vLLM
 
 #+begin_src sh
 vllm serve /ramdisk
 #+end_src
+
