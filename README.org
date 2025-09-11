@@ -57,7 +57,7 @@ modctl push --plain-http tosh.lan:5000/qwen/qwen3-0.6b:latest
 openssl genpkey -algorithm RSA -out private.pem -pkeyopt rsa_keygen_bits:4096
 openssl rsa -pubout -in private.pem -out public.pem
 
-skopeo copy --encryption-key jwe:public-key.pem \
+skopeo copy --encryption-key jwe:public.pem \
 	docker://tosh.lan:5000/qwen/qwen3-0.6b:latest \
 	docker://tosh.lan:5000/qwen/qwen3-0.6b:encrypted
 #+end_src
