@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: encrypted-model-inference
+  labels:
+    app: vllm-encrypted-model
+spec:
+  initContainers:
+  - name: model-downloader
+    image: your-registry/encrypted-model-downloader:latest
+    ports:
+    - containerPort: 22
+      name: ssh
+    env:
+    - name: PRIVATE_KEY_FILE
+      value: "/shared/keys/private.key"
+    - name: OCI_REGISTRY
+      value: "quay.io"
+    - name: ENCRYPTED_IMAGE
+      value: "your-registry/encrypted-model:latest"
+    - name: MODEL_DIR
+      value: "/shared/ramdisk"
+    volumeMounts:
+    - name: shared-ramdisk
+      mountPath: /shared
+    resources:
+      requests:
+        memory: "4Gi"
+        cpu: "1000m"
+      limits:
+        memory: "8Gi"
+        cpu: "2000m"
+  containers:
+  - name: vllm-server
+    image: vllm/vllm-openai:latest
+    command: ["python", "-m", "vllm.entrypoints.openai.api_server"]
+    args:
+    - --model=/shared/ramdisk/model
+    - --host=0.0.0.0
+    - --port=8000
+    - --served-model-name=encrypted-model
+    ports:
+    - containerPort: 8000
+      name: http
+    volumeMounts:
+    - name: shared-ramdisk
+      mountPath: /shared
+      readOnly: true
+    env:
+    - name: CUDA_VISIBLE_DEVICES
+      value: "0"
+    resources:
+      requests:
+        memory: "8Gi"
+        cpu: "2000m"
+        nvidia.com/gpu: "1"
+      limits:
+        memory: "16Gi"
+        cpu: "4000m"
+        nvidia.com/gpu: "1"
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: 8000
+      initialDelaySeconds: 30
+      periodSeconds: 10
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: 8000
+      initialDelaySeconds: 60
+      periodSeconds: 30
+  volumes:
+  - name: shared-ramdisk
+    emptyDir:
+      medium: Memory
+      sizeLimit: "12Gi"
+  restartPolicy: Never
