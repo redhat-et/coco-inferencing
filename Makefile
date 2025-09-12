@@ -4,6 +4,7 @@ MODEL_LC=$(shell echo $(MODEL) | tr '[:upper:]' '[:lower:]')
 MODCTL=modctl
 SKOPEO=skopeo
 HF=huggingface-cli
+CACHEDIR=.modctl
 
 # Pod configuration variables
 OCI_REGISTRY=$(REGISTRY)
@@ -17,10 +18,8 @@ fetch:	## Fetch image from Huggingface
 
 oci:	## Build OCI artifact for model
 	$(MODCTL) modelfile generate model
-	$(MODCTL) build -t $(REGISTRY)/$(MODEL_LC):latest -f Modelfile model
-
-push:	## Push OCI artifact to registry
-	$(MODCTL) push --plain-http $(REGISTRY)/$(MODEL_LC):latest
+	$(MODCTL) build --storage-dir $(CACHEDIR) -t localhost/$(MODEL_LC):latest -f Modelfile model
+	./modctl-to-oci.sh localhost/$(MODEL_LC) latest $(CACHEDIR) staging
 
 gen-keys:	## Generate crypto keypair
 	openssl genpkey -algorithm RSA -out private.pem -pkeyopt rsa_keygen_bits:4096
@@ -46,13 +45,13 @@ setup-ssh-access:	## Setup SSH access by adding public key to authorized_keys
 
 encrypt:	## Encrypt the model (registry -> registry)
 	$(SKOPEO) copy --encryption-key jwe:public.pem \
-		docker://$(REGISTRY)/$(MODEL_LC):latest \
+		dir:staging \
 		docker://$(REGISTRY)/$(MODEL_LC):encrypted
 
 decrypt:	## Decrypt the modek (registry -> registry)
 	$(SKOPEO) copy --decryption-key private.pem \
 		docker://$(REGISTRY)/$(MODEL_LC):encrypted \
-		docker://$(REGISTRY)/$(MODEL_LC):decrypted
+		dir:decrypted
 
 pull:	## Pull and extract model from registry
 	$(MODCTL) pull --extract-dir ramdisk --extract-from-remote --plain-http \
@@ -200,6 +199,10 @@ clean:	## Clean everything up, also deleting the kind cluster
 configure-machine:	## Configure podman machine to use insecure registry
 	envsubst < insecure-registry.conf.tmpl \
 	| podman machine ssh 'cat > /etc/containers/registries.conf.d/insecure-registry.conf'
+
+vllm-image:	## Build a vllm image
+	mkdir cache
+	podman build -t vllm -f vllm.containerfile -v `pwd`/cache:/root/.cache:z .
 
 help:	## This help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
