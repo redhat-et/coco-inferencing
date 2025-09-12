@@ -48,8 +48,29 @@ huggingface-cli download Qwen/Qwen3-0.6B --local-dir model
 
 modctl modelfile generate model
 modctl build -t tosh.lan:5000/qwen/qwen3-0.6b:latest -f Modelfile model
-modctl push --plain-http tosh.lan:5000/qwen/qwen3-0.6b:latest
 #+end_src
+
+*** Extract model from modctl cache dir
+
+#+begin_src sh :results output
+rm -rf staging
+mkdir staging
+REGDIR=~/.modctl/content.v1/docker/registry/v2
+REPODIR=${REGDIR}/repositories/tosh.lan:5000/qwen/qwen3-0.6b
+BLOBDIR=${REGDIR}/blobs/sha256
+TAGFILE=${REPODIR}/_manifests/tags/latest/current/link
+MID=$(cat $TAGFILE)
+MANIFEST=${BLOBDIR}/${MID:7:2}/${MID:7}/data
+cp ${MANIFEST} staging/manifest.json
+for DIGEST in `jq -M -r '.layers[] | .digest' ${MANIFEST}`
+do
+    cp ${BLOBDIR}/${DIGEST:7:2}/${DIGEST:7}/data staging/${DIGEST:7}
+done
+CONFIG=`jq -r .config.digest ${MANIFEST}`
+cp ${BLOBDIR}/${CONFIG:7:2}/${CONFIG:7}/data staging/${CONFIG:7}
+#+end_src
+
+#+RESULTS:
 
 *** Encrypt model with skopeo
 
@@ -58,9 +79,10 @@ openssl genpkey -algorithm RSA -out private.pem -pkeyopt rsa_keygen_bits:4096
 openssl rsa -pubout -in private.pem -out public.pem
 
 skopeo copy --encryption-key jwe:public.pem \
-	docker://tosh.lan:5000/qwen/qwen3-0.6b:latest \
+	dir:staging \
 	docker://tosh.lan:5000/qwen/qwen3-0.6b:encrypted
 #+end_src
+
 
 *** Decrypt model with skopeo
 
