@@ -1,0 +1,7 @@
+# Add your public SSH key here to enable SCP access to the init container
+# Example (replace with your actual public key):
+# ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC... your-email@example.com
+
+# To generate a new SSH key pair:
+# ssh-keygen -t rsa -b 4096 -C "your-email@example.com"
+# Then copy the contents of ~/.ssh/id_rsa.pub to this file
