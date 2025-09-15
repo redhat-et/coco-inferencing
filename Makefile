@@ -57,9 +57,9 @@ pull:	## Pull and extract model from registry
 	$(MODCTL) pull --extract-dir ramdisk --extract-from-remote --plain-http \
 		$(REGISTRY)/$(MODEL_LC):decrypted
 
-kind:	## Start a kind cluster
+kind:	## Start a kind cluster with local registry
 	envsubst < kind-config.yaml.tmpl > kind-config.yaml
-	kind create cluster --config kind-config.yaml --name coco
+	CLUSTER_NAME=coco CONFIG_FILE=kind-config.yaml ./kind-with-registry.sh
 
 init-container:	## Build the init container
 	podman build -t $(REGISTRY)/model-init:latest -f model-init.containerfile .

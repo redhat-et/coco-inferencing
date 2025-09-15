@@ -20,7 +20,16 @@ fi
 # https://github.com/kubernetes-sigs/kind/issues/2875
 # https://github.com/containerd/containerd/blob/main/docs/cri/config.md#registry-configuration
 # See: https://github.com/containerd/containerd/blob/main/docs/hosts.md
-cat <<EOF | kind create cluster --config=-
+# Use provided config file and cluster name, or defaults
+CLUSTER_NAME=${CLUSTER_NAME:-kind}
+CONFIG_FILE=${CONFIG_FILE:-}
+
+if [ -n "$CONFIG_FILE" ] && [ -f "$CONFIG_FILE" ]; then
+  echo "Using config file: $CONFIG_FILE with cluster name: $CLUSTER_NAME"
+  kind create cluster --config="$CONFIG_FILE" --name="$CLUSTER_NAME"
+else
+  echo "Using inline config with cluster name: $CLUSTER_NAME"
+  cat <<EOF | kind create cluster --config=- --name="$CLUSTER_NAME"
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 featureGates:
@@ -30,6 +39,7 @@ containerdConfigPatches:
   [plugins."io.containerd.grpc.v1.cri".registry]
     config_path = "/etc/containerd/certs.d"
 EOF
+fi
 
 # 3. Add the registry config to the nodes
 #
@@ -40,7 +50,7 @@ EOF
 # We want a consistent name that works from both ends, so we tell containerd to
 # alias localhost:${reg_port} to the registry container when pulling images
 REGISTRY_DIR="/etc/containerd/certs.d/localhost:${reg_port}"
-for node in $(kind get nodes); do
+for node in $(kind get nodes --name="$CLUSTER_NAME"); do
   docker exec "${node}" mkdir -p "${REGISTRY_DIR}"
   cat <<EOF | docker exec -i "${node}" cp /dev/stdin "${REGISTRY_DIR}/hosts.toml"
 [host."http://${reg_name}:5000"]
