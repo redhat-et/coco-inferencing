@@ -1,9 +1,9 @@
-REGISTRY=tosh.lan:5000
+REGISTRY=localhost:5000
 MODEL=Qwen/Qwen3-0.6B
 MODEL_LC=$(shell echo $(MODEL) | tr '[:upper:]' '[:lower:]')
 MODCTL=modctl
 SKOPEO=skopeo
-HF=huggingface-cli
+HF=hf
 CACHEDIR=.modctl
 
 # Pod configuration variables
