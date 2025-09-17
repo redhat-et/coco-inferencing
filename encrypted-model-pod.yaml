@@ -33,7 +33,7 @@ spec:
   containers:
   - name: vllm-server
     image: vllm/vllm-openai:latest
-    command: ["python", "-m", "vllm.entrypoints.openai.api_server"]
+    command: ["python3", "-m", "vllm.entrypoints.openai.api_server"]
     args:
     - --model=/shared/ramdisk/model
     - --host=0.0.0.0
