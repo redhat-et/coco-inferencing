@@ -61,10 +61,6 @@ kind:	## Start a kind cluster with local registry
 	envsubst < kind-config.yaml.tmpl > kind-config.yaml
 	CLUSTER_NAME=coco CONFIG_FILE=kind-config.yaml ./kind-with-registry.sh
 
-init-container:	## Build the init container
-	podman build -t $(REGISTRY)/model-init:latest -f model-init.containerfile .
-	podman push $(REGISTRY)/model-init:latest
-
 build-downloader:	## Build the encrypted model downloader container
 	podman build -t $(REGISTRY)/encrypted-model-downloader:latest model-downloader
 
