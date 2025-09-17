@@ -12,6 +12,8 @@ RUN dnf update -y && \
     gpgme-devel \
     device-mapper-devel \
     openssh-server \
+    hostname \
+    containers-common \
     && dnf clean all
 
 # Build custom skopeo with encryption support
