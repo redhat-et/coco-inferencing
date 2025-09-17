@@ -66,7 +66,7 @@ init-container:	## Build the init container
 	podman push $(REGISTRY)/model-init:latest
 
 build-downloader:	## Build the encrypted model downloader container
-	podman build -t $(REGISTRY)/encrypted-model-downloader:latest .
+	podman build -t $(REGISTRY)/encrypted-model-downloader:latest model-downloader
 
 push-downloader:	## Push the encrypted model downloader container
 	podman push $(REGISTRY)/encrypted-model-downloader:latest
