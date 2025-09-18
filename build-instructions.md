@@ -41,8 +41,14 @@ make setup-ssh-access
 
 ### 4. Encrypt and Push Model
 ```bash
-# Encrypt the staged model and push to local registry
+# Encrypt the staged model and push to local registry (uses container by default)
 make encrypt
+
+# Alternative: Use local skopeo binary instead of container
+make encrypt USE_SKOPEO_CONTAINER=false
+
+# Alternative: Use custom skopeo container image
+make encrypt SKOPEO_IMAGE=your-registry/skopeo:tag
 ```
 
 ### 5. Build and Deploy Infrastructure
@@ -56,10 +62,10 @@ make deploy-encrypted-pod
 
 ### 6. Secure Key Transfer and Model Loading
 ```bash
-# In Terminal 1: Setup port forwarding for SSH access
-make setup-port-forward
+# Transfer the private key to trigger model download
+make transfer-key-default
 
-# In Terminal 2: Transfer the private key to trigger model download
+# Alternative: Transfer custom key file
 make transfer-key PRIVATE_KEY_PATH=./private.pem
 
 # Monitor the entire process
@@ -96,13 +102,13 @@ make clean
 - **Ramdisk Storage**: All decrypted content exists only in encrypted ramdisk memory (`/shared/ramdisk`)
 - **Standard Init Container**: The downloader container itself is not encrypted - security comes from the TEE environment
 - **No Disk Persistence**: Decrypted model never touches unencrypted storage outside the TEE ramdisk
-- **Secure Key Transfer**: Private key transferred via SSH to trigger decryption within TEE memory
+- **Secure Key Transfer**: Private key transferred via kubectl cp to trigger decryption within TEE memory
 
 ### Workflow Details
 1. **Model Preparation**: HuggingFace model → modctl OCI artifact → encrypted with RSA key
-2. **Container Setup**: Standard init container with skopeo + SSH server for secure key transfer
+2. **Container Setup**: Standard init container with skopeo for encrypted model decryption
 3. **Pod Deployment**: Init container waits for private key, app container waits for model
-4. **Secure Transfer**: Private key transferred via SSH to trigger decryption within TEE ramdisk
+4. **Secure Transfer**: Private key transferred via kubectl cp to trigger decryption within TEE ramdisk
 5. **Model Loading**: Init container decrypts directly to TEE ramdisk, extracts layers, cleans up
 6. **Inference Ready**: vLLM server starts with model from TEE encrypted ramdisk
 
