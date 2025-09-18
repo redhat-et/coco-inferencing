@@ -3,6 +3,8 @@ MODEL=Qwen/Qwen3-0.6B
 MODEL_LC=$(shell echo $(MODEL) | tr '[:upper:]' '[:lower:]')
 MODCTL=modctl
 SKOPEO=skopeo
+SKOPEO_IMAGE?=quay.io/ifont/skopeo:dev
+USE_SKOPEO_CONTAINER?=true
 HF=hf
 CACHEDIR=.modctl
 
@@ -10,6 +12,9 @@ CACHEDIR=.modctl
 USE_TLS?=false
 SKOPEO_TLS_FLAGS=$(if $(filter true,$(USE_TLS)),,--dest-tls-verify=false --src-tls-verify=false)
 PODMAN_TLS_FLAGS=$(if $(filter true,$(USE_TLS)),,--tls-verify=false)
+
+# Skopeo command configuration
+SKOPEO_CMD=$(if $(filter true,$(USE_SKOPEO_CONTAINER)),podman run --rm -v $(PWD):/workspace:Z -w /workspace $(SKOPEO_IMAGE),$(SKOPEO))
 
 # Pod configuration variables
 OCI_REGISTRY=$(REGISTRY)
@@ -50,12 +55,12 @@ setup-ssh-access:	## Setup SSH access by adding public key to authorized_keys
 	fi
 
 encrypt:	## Encrypt the model (registry -> registry)
-	$(SKOPEO) copy --encryption-key jwe:public.pem $(SKOPEO_TLS_FLAGS) \
+	$(SKOPEO_CMD) copy --encryption-key jwe:public.pem $(SKOPEO_TLS_FLAGS) \
 		dir:staging \
 		docker://$(REGISTRY)/$(MODEL_LC):encrypted
 
 decrypt:	## Decrypt the modek (registry -> registry)
-	$(SKOPEO) copy --decryption-key private.pem $(SKOPEO_TLS_FLAGS) \
+	$(SKOPEO_CMD) copy --decryption-key private.pem $(SKOPEO_TLS_FLAGS) \
 		docker://$(REGISTRY)/$(MODEL_LC):encrypted \
 		dir:decrypted
 
@@ -123,17 +128,14 @@ setup-port-forward:	## Setup port forwarding for SSH access
 	@echo "Port forwarding started in background. PID: $$!"
 	@echo "To stop: kill $$!"
 
-transfer-key:	## Transfer private key via SCP (requires PRIVATE_KEY_PATH variable)
+transfer-key:	## Transfer private key via kubectl cp (requires PRIVATE_KEY_PATH variable)
 	@if [ -z "$(PRIVATE_KEY_PATH)" ]; then \
 		echo "Error: Please specify PRIVATE_KEY_PATH variable"; \
 		echo "Usage: make transfer-key PRIVATE_KEY_PATH=/path/to/your/private.pem"; \
 		exit 1; \
 	fi
 	@echo "Transferring private key: $(PRIVATE_KEY_PATH)"
-	@echo "Make sure port forwarding is running (make setup-port-forward)"
-	@sleep 2
-	@scp -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-		$(PRIVATE_KEY_PATH) root@localhost:/shared/keys/private.key
+	@kubectl cp "$(PRIVATE_KEY_PATH)" encrypted-model-inference:/shared/keys/private.key -c model-downloader
 	@echo "Private key transferred successfully!"
 
 stop-port-forward:	## Stop port forwarding processes
@@ -190,14 +192,31 @@ show-config:	## Show current configuration
 	@echo "  ENCRYPTED_IMAGE: $(ENCRYPTED_IMAGE)"
 	@echo "  DOWNLOADER_IMAGE: $(DOWNLOADER_IMAGE)"
 	@echo ""
+	@echo "Skopeo Configuration:"
+	@echo "  USE_SKOPEO_CONTAINER: $(USE_SKOPEO_CONTAINER)"
+	@echo "  SKOPEO_IMAGE: $(SKOPEO_IMAGE)"
+	@echo "  SKOPEO_CMD: $(SKOPEO_CMD)"
+	@echo ""
 	@echo "TLS Configuration:"
 	@echo "  To enable TLS: make <target> USE_TLS=true"
 	@echo "  To disable TLS: make <target> USE_TLS=false (default)"
+	@echo ""
+	@echo "Skopeo Usage:"
+	@echo "  Use container: make <target> USE_SKOPEO_CONTAINER=true (default)"
+	@echo "  Use local binary: make <target> USE_SKOPEO_CONTAINER=false"
+	@echo "  Custom image: make <target> SKOPEO_IMAGE=your-registry/skopeo:tag"
 
 # Complete workflow targets
 deploy-complete: gen-ssh-key setup-ssh-access build-push-downloader deploy-encrypted-pod	## Complete deployment workflow
 
-transfer-and-wait: setup-port-forward transfer-key wait-for-pod	## Setup port forwarding, transfer key, and wait for pod
+transfer-key-default:	## Transfer default private.pem key
+	@echo "Transferring default private key: private.pem"
+	@kubectl cp private.pem encrypted-model-inference:/shared/keys/private.key -c model-downloader
+	@echo "Private key transferred successfully!"
+
+transfer-and-wait: transfer-key wait-for-pod	## Transfer key and wait for pod completion
+
+transfer-and-wait-default: transfer-key-default wait-for-pod	## Transfer default key and wait for pod completion
 
 clean:	## Clean everything up, also deleting the kind cluster
 	-rm -f Modelfile
