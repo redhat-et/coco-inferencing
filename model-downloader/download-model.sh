@@ -6,9 +6,13 @@ echo "Starting encrypted model download process..."
 # Environment variables with defaults
 PRIVATE_KEY_FILE="${PRIVATE_KEY_FILE:-/shared/keys/private.key}"
 OCI_REGISTRY="${OCI_REGISTRY:-quay.io}"
-ENCRYPTED_IMAGE="${ENCRYPTED_IMAGE:-your-registry/encrypted-model:latest}"
+MODEL_NAME="${MODEL_NAME:-qwen/qwen3-0.6b}"
 MODEL_DIR="${MODEL_DIR:-/shared/ramdisk}"
+USE_TLS="${USE_TLS:-false}"
 DECRYPTED_DIR="${MODEL_DIR}/decrypted"
+
+# Construct encrypted image name from registry and model name
+ENCRYPTED_IMAGE="${OCI_REGISTRY}/${MODEL_NAME}:encrypted"
 
 echo "Configuration:"
 echo "  Private key file: $PRIVATE_KEY_FILE"
@@ -16,6 +20,7 @@ echo "  OCI registry: $OCI_REGISTRY"
 echo "  Encrypted image: $ENCRYPTED_IMAGE"
 echo "  Model directory (ramdisk): $MODEL_DIR"
 echo "  Decrypted OCI directory: $DECRYPTED_DIR"
+echo "  Use TLS: $USE_TLS"
 
 # Create necessary directories in ramdisk (TEE encrypted memory)
 mkdir -p "$MODEL_DIR"
@@ -51,8 +56,19 @@ echo "Target directory (in TEE encrypted memory): $DECRYPTED_DIR"
 
 # Use custom skopeo to pull and decrypt the image directly to ramdisk
 # This ensures the decrypted content only exists in TEE encrypted memory
+
+# Configure TLS verification based on USE_TLS setting
+if [ "$USE_TLS" = "true" ]; then
+    TLS_FLAGS=""
+    echo "Using TLS verification for registry connection"
+else
+    TLS_FLAGS="--src-tls-verify=false"
+    echo "Disabling TLS verification for registry connection"
+fi
+
 skopeo copy \
     --decryption-key "$PRIVATE_KEY_FILE" \
+    $TLS_FLAGS \
     "docker://$ENCRYPTED_IMAGE" \
     "dir:$DECRYPTED_DIR"
 
@@ -100,6 +116,9 @@ rm -rf "$DECRYPTED_DIR"
 
 echo "Ramdisk usage after cleanup:"
 df -h "$MODEL_DIR"
+
+echo "=== ENCRYPTED MODEL VERIFICATION COMPLETE ==="
+echo "Model successfully decrypted and extracted to TEE ramdisk!"
 
 # Stop SSH daemon
 echo "Stopping SSH daemon..."
