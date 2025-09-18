@@ -1,4 +1,4 @@
-REGISTRY=localhost:5000
+REGISTRY=localhost:5001
 MODEL=Qwen/Qwen3-0.6B
 MODEL_LC=$(shell echo $(MODEL) | tr '[:upper:]' '[:lower:]')
 MODCTL=modctl
@@ -6,8 +6,14 @@ SKOPEO=skopeo
 HF=hf
 CACHEDIR=.modctl
 
+# TLS configuration
+USE_TLS?=false
+SKOPEO_TLS_FLAGS=$(if $(filter true,$(USE_TLS)),,--dest-tls-verify=false --src-tls-verify=false)
+PODMAN_TLS_FLAGS=$(if $(filter true,$(USE_TLS)),,--tls-verify=false)
+
 # Pod configuration variables
 OCI_REGISTRY=$(REGISTRY)
+MODEL_NAME=$(MODEL_LC)
 ENCRYPTED_IMAGE=$(REGISTRY)/$(MODEL_LC):encrypted
 DOWNLOADER_IMAGE=$(REGISTRY)/encrypted-model-downloader:latest
 
@@ -34,22 +40,22 @@ gen-ssh-key:	## Generate SSH keypair for container access
 	fi
 
 setup-ssh-access:	## Setup SSH access by adding public key to authorized_keys
-	@echo "Adding SSH public key to authorized_keys..."
+	@echo "Adding SSH public key to ./model-downloader/authorized_keys..."
 	@if [ -f ~/.ssh/id_rsa.pub ]; then \
-		cp ~/.ssh/id_rsa.pub authorized_keys; \
-		echo "SSH public key added to authorized_keys"; \
+		cp ~/.ssh/id_rsa.pub ./model-downloader/authorized_keys; \
+		echo "SSH public key added to ./model-downloader/authorized_keys"; \
 	else \
 		echo "SSH public key not found. Run 'make gen-ssh-key' first."; \
 		exit 1; \
 	fi
 
 encrypt:	## Encrypt the model (registry -> registry)
-	$(SKOPEO) copy --encryption-key jwe:public.pem \
+	$(SKOPEO) copy --encryption-key jwe:public.pem $(SKOPEO_TLS_FLAGS) \
 		dir:staging \
 		docker://$(REGISTRY)/$(MODEL_LC):encrypted
 
 decrypt:	## Decrypt the modek (registry -> registry)
-	$(SKOPEO) copy --decryption-key private.pem \
+	$(SKOPEO) copy --decryption-key private.pem $(SKOPEO_TLS_FLAGS) \
 		docker://$(REGISTRY)/$(MODEL_LC):encrypted \
 		dir:decrypted
 
@@ -65,29 +71,31 @@ build-downloader:	## Build the encrypted model downloader container
 	podman build -t $(REGISTRY)/encrypted-model-downloader:latest model-downloader
 
 push-downloader:	## Push the encrypted model downloader container
-	podman push $(REGISTRY)/encrypted-model-downloader:latest
+	podman push $(PODMAN_TLS_FLAGS) $(REGISTRY)/encrypted-model-downloader:latest
 
 build-push-downloader: build-downloader push-downloader	## Build and push the encrypted model downloader container
 
 validate-config:	## Validate required configuration variables
 	@echo "Validating configuration..."
 	@if [ -z "$(REGISTRY)" ]; then echo "Error: REGISTRY not set"; exit 1; fi
-	@if [ -z "$(ENCRYPTED_IMAGE)" ]; then echo "Error: ENCRYPTED_IMAGE not set"; exit 1; fi
+	@if [ -z "$(MODEL_NAME)" ]; then echo "Error: MODEL_NAME not set"; exit 1; fi
 	@if [ -z "$(DOWNLOADER_IMAGE)" ]; then echo "Error: DOWNLOADER_IMAGE not set"; exit 1; fi
 	@if [ -z "$(OCI_REGISTRY)" ]; then echo "Error: OCI_REGISTRY not set"; exit 1; fi
 	@echo "Configuration validation passed"
 
 update-pod-config: validate-config	## Update pod YAML with current environment variables
 	@echo "Updating pod YAML configuration..."
-	@sed -e 's|your-registry/encrypted-model-downloader:latest|$(DOWNLOADER_IMAGE)|g' \
-	     -e 's|value: "quay.io"|value: "$(OCI_REGISTRY)"|g' \
-	     -e 's|value: "your-registry/encrypted-model:latest"|value: "$(ENCRYPTED_IMAGE)"|g' \
+	@sed -e 's|localhost:5001/encrypted-model-downloader:latest|$(DOWNLOADER_IMAGE)|g' \
+	     -e 's|value: "kind-registry:5000"|value: "$(OCI_REGISTRY)"|g' \
+	     -e 's|value: "qwen/qwen3-0.6b"|value: "$(MODEL_NAME)"|g' \
+	     -e '/name: USE_TLS/{n;s|value: "false"|value: "$(USE_TLS)"|;}' \
 	     encrypted-model-pod.yaml > encrypted-model-pod.yaml.tmp
 	@mv encrypted-model-pod.yaml.tmp encrypted-model-pod.yaml
 	@echo "Pod YAML updated with:"
 	@echo "  Downloader image: $(DOWNLOADER_IMAGE)"
 	@echo "  OCI registry: $(OCI_REGISTRY)"
-	@echo "  Encrypted image: $(ENCRYPTED_IMAGE)"
+	@echo "  Model name: $(MODEL_NAME)"
+	@echo "  Use TLS: $(USE_TLS)"
 
 deploy-encrypted-pod: update-pod-config	## Deploy the encrypted model inference pod
 	@echo "Deploying encrypted model inference pod..."
@@ -139,10 +147,12 @@ run:	## Run the inferencing pod
 config-local:	## Configure for local registry (kind cluster)
 	$(eval REGISTRY=localhost:5000)
 	$(eval OCI_REGISTRY=localhost:5000)
+	$(eval MODEL_NAME=$(MODEL_LC))
 	$(eval ENCRYPTED_IMAGE=localhost:5000/$(MODEL_LC):encrypted)
 	$(eval DOWNLOADER_IMAGE=localhost:5000/encrypted-model-downloader:latest)
 	@echo "Configuration set for local registry:"
 	@echo "  REGISTRY: $(REGISTRY)"
+	@echo "  MODEL_NAME: $(MODEL_NAME)"
 	@echo "  ENCRYPTED_IMAGE: $(ENCRYPTED_IMAGE)"
 
 config-quay:	## Configure for Quay.io registry
@@ -174,9 +184,15 @@ show-config:	## Show current configuration
 	@echo "  REGISTRY: $(REGISTRY)"
 	@echo "  MODEL: $(MODEL)"
 	@echo "  MODEL_LC: $(MODEL_LC)"
+	@echo "  MODEL_NAME: $(MODEL_NAME)"
+	@echo "  USE_TLS: $(USE_TLS)"
 	@echo "  OCI_REGISTRY: $(OCI_REGISTRY)"
 	@echo "  ENCRYPTED_IMAGE: $(ENCRYPTED_IMAGE)"
 	@echo "  DOWNLOADER_IMAGE: $(DOWNLOADER_IMAGE)"
+	@echo ""
+	@echo "TLS Configuration:"
+	@echo "  To enable TLS: make <target> USE_TLS=true"
+	@echo "  To disable TLS: make <target> USE_TLS=false (default)"
 
 # Complete workflow targets
 deploy-complete: gen-ssh-key setup-ssh-access build-push-downloader deploy-encrypted-pod	## Complete deployment workflow
