@@ -7,7 +7,7 @@ metadata:
 spec:
   initContainers:
   - name: model-downloader
-    image: your-registry/encrypted-model-downloader:latest
+    image: localhost:5001/encrypted-model-downloader:latest
     ports:
     - containerPort: 22
       name: ssh
@@ -15,11 +15,13 @@ spec:
     - name: PRIVATE_KEY_FILE
       value: "/shared/keys/private.key"
     - name: OCI_REGISTRY
-      value: "quay.io"
-    - name: ENCRYPTED_IMAGE
-      value: "your-registry/encrypted-model:latest"
+      value: "kind-registry:5000"
+    - name: MODEL_NAME
+      value: "qwen/qwen3-0.6b"
     - name: MODEL_DIR
       value: "/shared/ramdisk"
+    - name: USE_TLS
+      value: "false"
     volumeMounts:
     - name: shared-ramdisk
       mountPath: /shared
@@ -39,6 +41,7 @@ spec:
     - --host=0.0.0.0
     - --port=8000
     - --served-model-name=encrypted-model
+    - --device=cpu
     ports:
     - containerPort: 8000
       name: http
@@ -47,17 +50,19 @@ spec:
       mountPath: /shared
       readOnly: true
     env:
-    - name: CUDA_VISIBLE_DEVICES
-      value: "0"
+    - name: VLLM_DEVICE
+      value: "cpu"
+    - name: VLLM_LOGGING_LEVEL
+      value: "DEBUG"
     resources:
       requests:
         memory: "8Gi"
         cpu: "2000m"
-        nvidia.com/gpu: "1"
+        #nvidia.com/gpu: "1"
       limits:
         memory: "16Gi"
         cpu: "4000m"
-        nvidia.com/gpu: "1"
+        #nvidia.com/gpu: "1"
     readinessProbe:
       httpGet:
         path: /health
