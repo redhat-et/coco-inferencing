@@ -49,6 +49,9 @@ make encrypt USE_SKOPEO_CONTAINER=false
 
 # Alternative: Use custom skopeo container image
 make encrypt SKOPEO_IMAGE=your-registry/skopeo:tag
+
+# Verify that the encrypted image exists in the registry
+curl -s http://localhost:5001/v2/qwen/qwen3-0.6b/tags/list
 ```
 
 ### 5. Build and Deploy Infrastructure
@@ -56,8 +59,11 @@ make encrypt SKOPEO_IMAGE=your-registry/skopeo:tag
 # Build the model downloader container
 make build-push-downloader
 
-# Deploy the pod with init container and vLLM app container
-make deploy-encrypted-pod
+# Deploy the pod with init container and vLLM app container. Verify you use the
+# correct REGISTRY and OCI_REGISTRY values. Command below is for use with kind
+# as the pod init container image registry is different from the registry used
+# within the download-model.sh script that is internal in the cluster.
+make deploy-encrypted-pod REGISTRY=localhost:5001 OCI_REGISTRY=kind-registry:5000
 ```
 
 ### 6. Secure Key Transfer and Model Loading
