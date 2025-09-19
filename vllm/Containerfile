@@ -1,8 +1,11 @@
 # -*- dockerfile -*-
 FROM fedora:42
 
-RUN dnf install -y uv git python3.12 python3.12-devel gcc ccache g++ \
-    cmake ninja numactl-devel numactl-libs
+RUN <<EOF
+    dnf install -y uv git python3.12 python3.12-devel gcc ccache g++ cmake \
+      ninja numactl-devel numactl-libs execstack
+    execstack -s /usr/bin/python3.12
+EOF
 
 RUN git clone https://github.com/vllm-project/vllm.git
 
