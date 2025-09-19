@@ -60,13 +60,13 @@ spec:
       httpGet:
         path: /health
         port: 8000
-      initialDelaySeconds: 30
+      initialDelaySeconds: 180
       periodSeconds: 10
     livenessProbe:
       httpGet:
         path: /health
         port: 8000
-      initialDelaySeconds: 60
+      initialDelaySeconds: 240
       periodSeconds: 30
   volumes:
   - name: shared-ramdisk
