@@ -4,3 +4,4 @@ Modelfile
 .modctl
 staging
 *.pem
+decrypted
