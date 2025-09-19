@@ -34,14 +34,12 @@ spec:
         cpu: "2000m"
   containers:
   - name: vllm-server
-    image: vllm/vllm-openai:latest
-    command: ["python3", "-m", "vllm.entrypoints.openai.api_server"]
+    image: quay.io/donhunte/vllm-cpu:latest
     args:
+    - serve
     - --model=/shared/ramdisk/model
-    - --host=0.0.0.0
-    - --port=8000
     - --served-model-name=encrypted-model
-    - --device=cpu
+    - --max-model-len=10000
     ports:
     - containerPort: 8000
       name: http
@@ -49,11 +47,6 @@ spec:
     - name: shared-ramdisk
       mountPath: /shared
       readOnly: true
-    env:
-    - name: VLLM_DEVICE
-      value: "cpu"
-    - name: VLLM_LOGGING_LEVEL
-      value: "DEBUG"
     resources:
       requests:
         memory: "8Gi"
