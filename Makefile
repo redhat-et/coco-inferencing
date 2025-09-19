@@ -14,7 +14,7 @@ SKOPEO_TLS_FLAGS=$(if $(filter true,$(USE_TLS)),,--dest-tls-verify=false --src-t
 PODMAN_TLS_FLAGS=$(if $(filter true,$(USE_TLS)),,--tls-verify=false)
 
 # Skopeo command configuration
-SKOPEO_CMD=$(if $(filter true,$(USE_SKOPEO_CONTAINER)),podman run --rm -v $(PWD):/workspace:Z -w /workspace $(SKOPEO_IMAGE),$(SKOPEO))
+SKOPEO_CMD=$(if $(filter true,$(USE_SKOPEO_CONTAINER)),podman run --rm --net=host -v $(PWD):/workspace:Z -v $(PWD)/policy.json:/etc/containers/policy.json:Z -w /workspace $(SKOPEO_IMAGE),$(SKOPEO))
 
 # Pod configuration variables
 OCI_REGISTRY=$(REGISTRY)
@@ -91,7 +91,7 @@ validate-config:	## Validate required configuration variables
 update-pod-config: validate-config	## Update pod YAML with current environment variables
 	@echo "Updating pod YAML configuration..."
 	@sed -e 's|localhost:5001/encrypted-model-downloader:latest|$(DOWNLOADER_IMAGE)|g' \
-	     -e 's|value: "kind-registry:5000"|value: "$(OCI_REGISTRY)"|g' \
+	     -e 's|value: "localhost:5001"|value: "$(OCI_REGISTRY)"|g' \
 	     -e 's|value: "qwen/qwen3-0.6b"|value: "$(MODEL_NAME)"|g' \
 	     -e '/name: USE_TLS/{n;s|value: "false"|value: "$(USE_TLS)"|;}' \
 	     encrypted-model-pod.yaml > encrypted-model-pod.yaml.tmp
@@ -147,15 +147,17 @@ run:	## Run the inferencing pod
 
 # Configuration targets for different scenarios
 config-local:	## Configure for local registry (kind cluster)
-	$(eval REGISTRY=localhost:5000)
-	$(eval OCI_REGISTRY=localhost:5000)
+	$(eval REGISTRY=$(REGISTRY))
+	$(eval OCI_REGISTRY=$(OCI_REGISTRY))
 	$(eval MODEL_NAME=$(MODEL_LC))
-	$(eval ENCRYPTED_IMAGE=localhost:5000/$(MODEL_LC):encrypted)
-	$(eval DOWNLOADER_IMAGE=localhost:5000/encrypted-model-downloader:latest)
+	$(eval ENCRYPTED_IMAGE=$(ENCRYPTED_IMAGE))
+	$(eval DOWNLOADER_IMAGE=$(DOWNLOADER_IMAGE))
 	@echo "Configuration set for local registry:"
 	@echo "  REGISTRY: $(REGISTRY)"
+	@echo "  OCI_REGISTRY: $(OCI_REGISTRY)"
 	@echo "  MODEL_NAME: $(MODEL_NAME)"
 	@echo "  ENCRYPTED_IMAGE: $(ENCRYPTED_IMAGE)"
+	@echo "  DOWNLOADER_IMAGE: $(DOWNLOADER_IMAGE)"
 
 config-quay:	## Configure for Quay.io registry
 	$(eval OCI_REGISTRY=quay.io)
@@ -226,6 +228,7 @@ clean:	## Clean everything up, also deleting the kind cluster
 	-make stop-port-forward
 	-make delete-pod
 	-kind delete cluster --name coco
+	-podman rm -f kind-registry
 
 configure-machine:	## Configure podman machine to use insecure registry
 	envsubst < insecure-registry.conf.tmpl \
