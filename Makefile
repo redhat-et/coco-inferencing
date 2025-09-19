@@ -232,8 +232,8 @@ configure-machine:	## Configure podman machine to use insecure registry
 	| podman machine ssh 'cat > /etc/containers/registries.conf.d/insecure-registry.conf'
 
 vllm-image:	## Build a vllm image
-	mkdir cache
-	podman build -t vllm -f vllm.containerfile -v `pwd`/cache:/root/.cache:z .
+	mkdir -p cache
+	podman build -t vllm-cpu -v `pwd`/cache:/root/.cache:z vllm
 
 help:	## This help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)

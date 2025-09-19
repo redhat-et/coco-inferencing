@@ -1,0 +1,33 @@
+# -*- dockerfile -*-
+FROM fedora:42
+
+RUN dnf install -y uv git python3.12 python3.12-devel gcc ccache g++ \
+    cmake ninja numactl-devel numactl-libs
+
+RUN git clone https://github.com/vllm-project/vllm.git
+
+WORKDIR /vllm
+
+ENV CCACHE_DIR=/root/.cache/ccache
+ENV CMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+ARG PIP_EXTRA_INDEX_URL="https://download.pytorch.org/whl/cpu"
+ENV PIP_EXTRA_INDEX_URL=${PIP_EXTRA_INDEX_URL}
+ENV UV_EXTRA_INDEX_URL=${PIP_EXTRA_INDEX_URL}
+ENV UV_INDEX_STRATEGY="unsafe-best-match"
+ENV UV_LINK_MODE=copy
+
+ENV VLLM_TARGET_DEVICE=cpu
+ENV VLLM_CPU_DISABLE_AVX512=true
+
+RUN <<EOF
+    uv venv --python 3.12
+    source .venv/bin/activate
+    uv pip install -r requirements/cpu-build.txt --torch-backend cpu
+    uv pip install -r requirements/cpu.txt --torch-backend cpu
+    VLLM_TARGET_DEVICE=cpu python setup.py install
+EOF
+
+EXPOSE 8000
+
+ENTRYPOINT ["/vllm/.venv/bin/vllm"]
