@@ -1,0 +1,104 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kbs-config
+data:
+  kbs-config.toml: |
+    [kbs]
+    # Background Check Mode configuration
+    insecure_http = true
+    insecure_api = true
+    
+    [attestation_service]
+    # Mock AS endpoint for simulation
+    as_url = "http://mock-attestation-service:8080"
+    
+    [policy_engine]
+    # Simple policy for demo
+    policy_type = "opa"
+    
+  policy.rego: |
+    package policy
+    
+    import future.keywords.if
+    
+    # Demo policy - can be easily modified for allow/deny scenarios
+    default allow := false
+    
+    # Allow if attestation shows valid TEE (simulated)
+    allow if {
+        input.tee_evidence.platform == "simulated-tee"
+        input.tee_evidence.security_version >= 1
+        input.resource_policy.allow_access == true
+    }
+    
+    # Allow if demo mode is enabled (for easy testing)
+    allow if {
+        input.demo_mode == true
+    }
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kbs-service
+spec:
+  selector:
+    app: kbs
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kbs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kbs
+  template:
+    metadata:
+      labels:
+        app: kbs
+    spec:
+      containers:
+      - name: kbs
+        image: ghcr.io/confidential-containers/staged-images/kbs:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: KBS_CONFIG_FILE
+          value: "/etc/kbs/kbs-config.toml"
+        volumeMounts:
+        - name: kbs-config
+          mountPath: /etc/kbs
+        - name: kbs-secrets
+          mountPath: /opt/confidential-containers/kbs/repository
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: kbs-config
+        configMap:
+          name: kbs-config
+      - name: kbs-secrets
+        configMap:
+          name: kbs-secrets
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kbs-secrets
+data:
+  # Base64 encoded private key (will be populated by make target)
+  private.key: ""
