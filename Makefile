@@ -102,9 +102,16 @@ update-pod-config: validate-config	## Update pod YAML with current environment v
 	@echo "  Model name: $(MODEL_NAME)"
 	@echo "  Use TLS: $(USE_TLS)"
 
-deploy-encrypted-pod: update-pod-config	## Deploy the encrypted model inference pod
+deploy-encrypted-pod: 	## Deploy the encrypted model inference pod (use REGISTRY and OCI_REGISTRY vars for kind)
 	@echo "Deploying encrypted model inference pod..."
+	@echo "Using REGISTRY=$(REGISTRY) for init container image"
+	@echo "Using OCI_REGISTRY=$(OCI_REGISTRY) for internal model registry"
+	@$(MAKE) update-pod-config REGISTRY=$(REGISTRY) OCI_REGISTRY=$(OCI_REGISTRY)
 	@kubectl apply -f encrypted-model-pod.yaml
+
+deploy-encrypted-pod-kind:	## Deploy pod configured for Kind cluster (sets correct registries)
+	@echo "Deploying encrypted model inference pod for Kind cluster..."
+	@$(MAKE) deploy-encrypted-pod REGISTRY=localhost:5001 OCI_REGISTRY=kind-registry:5000
 
 delete-pod:	## Delete the encrypted model inference pod
 	kubectl delete pod encrypted-model-inference --ignore-not-found=true
@@ -237,6 +244,48 @@ configure-machine:	## Configure podman machine to use insecure registry
 vllm-image:	## Build a vllm image
 	mkdir -p cache
 	podman build -t vllm-cpu -v `pwd`/cache:/root/.cache:z vllm
+
+# KBS and Attestation targets
+deploy-kbs:	## Deploy KBS and mock attestation service
+	@echo "Deploying KBS infrastructure..."
+	@kubectl apply -f mock-attestation-service.yaml
+	@kubectl apply -f kbs-deployment.yaml
+	@echo "Waiting for services to be ready..."
+	@kubectl wait --for=condition=ready pod -l app=mock-attestation-service --timeout=60s
+	@kubectl wait --for=condition=ready pod -l app=kbs --timeout=60s
+	@echo "✅ KBS infrastructure deployed successfully!"
+
+populate-kbs-secrets:	## Populate KBS with private key
+	@echo "Populating KBS with private key..."
+	@kubectl create configmap kbs-secrets --from-file=private.key=private.pem --dry-run=client -o yaml | kubectl apply -f -
+	@kubectl rollout restart deployment/kbs
+	@echo "✅ KBS secrets populated and restarted!"
+
+kbs-policy-allow:	## Set attestation policy to ALLOW access
+	@echo "Setting attestation policy to ALLOW..."
+	@kubectl patch configmap mock-as-config --patch='{"data":{"attestation-policy.json":"{\"version\":\"1.0\",\"demo_mode\":true,\"policies\":{\"allow_scenario\":{\"enabled\":true,\"description\":\"Allow access - simulates successful attestation\",\"response\":{\"status\":\"success\",\"tee_evidence\":{\"platform\":\"simulated-tee\",\"security_version\":2,\"measurement\":\"abc123def456\"},\"resource_policy\":{\"allow_access\":true}}},\"deny_scenario\":{\"enabled\":false,\"description\":\"Deny access - simulates failed attestation\",\"response\":{\"status\":\"failed\",\"error\":\"Invalid TEE measurement\",\"tee_evidence\":{\"platform\":\"unknown\",\"security_version\":0},\"resource_policy\":{\"allow_access\":false}}}}}"}}' 
+	@kubectl rollout restart deployment/mock-attestation-service
+	@echo "✅ Policy set to ALLOW - attestation will succeed"
+
+kbs-policy-deny:	## Set attestation policy to DENY access  
+	@echo "Setting attestation policy to DENY..."
+	@kubectl patch configmap mock-as-config --patch='{"data":{"attestation-policy.json":"{\"version\":\"1.0\",\"demo_mode\":true,\"policies\":{\"allow_scenario\":{\"enabled\":false,\"description\":\"Allow access - simulates successful attestation\",\"response\":{\"status\":\"success\",\"tee_evidence\":{\"platform\":\"simulated-tee\",\"security_version\":2,\"measurement\":\"abc123def456\"},\"resource_policy\":{\"allow_access\":true}}},\"deny_scenario\":{\"enabled\":true,\"description\":\"Deny access - simulates failed attestation\",\"response\":{\"status\":\"failed\",\"error\":\"Invalid TEE measurement\",\"tee_evidence\":{\"platform\":\"unknown\",\"security_version\":0},\"resource_policy\":{\"allow_access\":false}}}}}"}}' 
+	@kubectl rollout restart deployment/mock-attestation-service
+	@echo "✅ Policy set to DENY - attestation will fail"
+
+kbs-status:	## Show KBS and attestation service status
+	@echo "=== KBS Infrastructure Status ==="
+	@kubectl get pods -l app=kbs -o wide
+	@kubectl get pods -l app=mock-attestation-service -o wide
+	@echo ""
+	@echo "=== Current Attestation Policy ==="
+	@kubectl exec -it deployment/mock-attestation-service -- curl -s http://localhost:8080/policy | python3 -m json.tool
+
+delete-kbs:	## Delete KBS infrastructure
+	@echo "Deleting KBS infrastructure..."
+	@kubectl delete -f kbs-deployment.yaml --ignore-not-found=true
+	@kubectl delete -f mock-attestation-service.yaml --ignore-not-found=true
+	@echo "✅ KBS infrastructure deleted"
 
 help:	## This help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
