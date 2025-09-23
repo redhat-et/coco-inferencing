@@ -38,13 +38,20 @@ echo "SSH server started. You can now SCP the private key file:"
 echo "  scp your-private-key.pem root@${POD_IP}:${PRIVATE_KEY_FILE}"
 echo "  (Use kubectl port-forward if needed: kubectl port-forward encrypted-model-inference 2222:22)"
 
-# Step 1: Wait for private key file to appear
-echo "Step 1: Waiting for private key file to appear..."
-while [ ! -f "$PRIVATE_KEY_FILE" ]; do
-    echo "Waiting for private key file: $PRIVATE_KEY_FILE"
-    sleep 5
-done
-echo "Private key file found: $PRIVATE_KEY_FILE"
+# Step 1: Retrieve private key via KBS attestation
+echo "Step 1: Retrieving private key via KBS attestation..."
+python3 /usr/local/bin/kbs-client.py
+
+if [ ! -f "$PRIVATE_KEY_FILE" ]; then
+    echo "ERROR: KBS key retrieval failed - private key not found at $PRIVATE_KEY_FILE"
+    echo "This could be due to:"
+    echo "  - Attestation policy denial"
+    echo "  - KBS service unavailable"
+    echo "  - Invalid TEE evidence"
+    exit 1
+fi
+
+echo "✅ Private key successfully retrieved via KBS attestation: $PRIVATE_KEY_FILE"
 
 # Verify key file permissions
 chmod 400 "$PRIVATE_KEY_FILE"
