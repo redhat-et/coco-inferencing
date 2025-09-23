@@ -14,6 +14,9 @@ RUN dnf update -y && \
     openssh-server \
     hostname \
     containers-common \
+    python3 \
+    python3-pip \
+    python3-requests \
     && dnf clean all
 
 # Build custom skopeo with encryption support
@@ -34,9 +37,11 @@ COPY sshd_config /etc/ssh/sshd_config
 COPY authorized_keys /root/.ssh/authorized_keys
 RUN chmod 600 /root/.ssh/authorized_keys
 
-# Copy the download script
+# Copy the download script and KBS client
 COPY download-model.sh /usr/local/bin/download-model.sh
+COPY kbs-client.py /usr/local/bin/kbs-client.py
 RUN chmod +x /usr/local/bin/download-model.sh
+RUN chmod +x /usr/local/bin/kbs-client.py
 
 # Expose SSH port
 EXPOSE 22
