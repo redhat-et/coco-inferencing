@@ -294,7 +294,7 @@ clean-k8s:	## Clean up all Kubernetes resources (pods, services, deployments)
 	@kubectl delete -f mock-attestation-service.yaml --ignore-not-found=true
 	@kubectl delete secret kbs-tls-certs --ignore-not-found=true
 	@kubectl delete secret kbs-auth-keys --ignore-not-found=true
-	@pkill -f "kubectl port-forward" || echo "No port forwarding processes found"
+	@-killall kubectl 2>/dev/null || echo "No kubectl processes found"
 	@echo "✅ All Kubernetes resources cleaned up"
 
 clean-temp-files:	## Clean up temporary certificate and key files
