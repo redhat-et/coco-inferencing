@@ -287,6 +287,72 @@ delete-kbs:	## Delete KBS infrastructure
 	@kubectl delete -f mock-attestation-service.yaml --ignore-not-found=true
 	@echo "✅ KBS infrastructure deleted"
 
+clean-k8s:	## Clean up all Kubernetes resources (pods, services, deployments)
+	@echo "🧹 Cleaning up all Kubernetes resources..."
+	@kubectl delete pod encrypted-model-inference --ignore-not-found=true
+	@kubectl delete -f kbs-deployment.yaml --ignore-not-found=true
+	@kubectl delete -f mock-attestation-service.yaml --ignore-not-found=true
+	@kubectl delete secret kbs-tls-certs --ignore-not-found=true
+	@kubectl delete secret kbs-auth-keys --ignore-not-found=true
+	@pkill -f "kubectl port-forward" || echo "No port forwarding processes found"
+	@echo "✅ All Kubernetes resources cleaned up"
+
+clean-temp-files:	## Clean up temporary certificate and key files
+	@echo "🗑️ Cleaning up temporary files..."
+	@rm -f kbs-auth-private.pem kbs-auth-public.pem
+	@rm -f kbs-auth-private-ed25519.key kbs-auth-public-ed25519.pub  
+	@rm -f kbs-tls-private.pem kbs-tls-cert.pem
+	@echo "✅ Temporary files cleaned up"
+
+## KBS Demo Workflow Targets
+
+gen-kbs-certs:	## Generate production-ready certificates for KBS
+	@echo "🔐 Generating production-ready certificates for KBS..."
+	@echo "Generating Ed25519 authentication keys..."
+	@openssl genpkey -algorithm ed25519 > kbs-auth-private-ed25519.key
+	@openssl pkey -in kbs-auth-private-ed25519.key -pubout -out kbs-auth-public-ed25519.pub
+	@chmod 600 kbs-auth-private-ed25519.key
+	@echo "Generating TLS certificates..."
+	@openssl req -x509 -newkey rsa:4096 -keyout kbs-tls-private.pem -out kbs-tls-cert.pem -days 365 -nodes -subj "/C=US/ST=Demo/L=Demo/O=CoCo/OU=KBS/CN=kbs-service"
+	@chmod 600 kbs-tls-private.pem
+	@echo "✅ KBS certificates generated successfully!"
+
+setup-kbs-secrets:	## Create Kubernetes secrets for KBS certificates
+	@echo "🔑 Creating Kubernetes secrets for KBS..."
+	@kubectl create secret generic kbs-tls-certs --from-file=cert.pem=kbs-tls-cert.pem --from-file=key.pem=kbs-tls-private.pem --dry-run=client -o yaml | kubectl apply -f -
+	@kubectl create secret generic kbs-auth-keys --from-file=public.pub=kbs-auth-public-ed25519.pub --dry-run=client -o yaml | kubectl apply -f -
+	@echo "✅ KBS secrets created successfully!"
+
+deploy-kbs-production:	## Deploy production KBS with proper certificates and attestation
+	@echo "🚀 Deploying production-ready KBS infrastructure..."
+	@$(MAKE) gen-kbs-certs
+	@$(MAKE) setup-kbs-secrets
+	@$(MAKE) deploy-kbs
+	@$(MAKE) populate-kbs-secrets
+	@echo "✅ Production KBS deployment complete!"
+
+demo-kbs-allow:	## Run complete KBS demo with ALLOW scenario
+	@echo "🎬 Running complete KBS demo - ALLOW scenario"
+	@$(MAKE) deploy-kbs-production
+	@$(MAKE) kbs-policy-allow
+	@$(MAKE) build-push-downloader
+	@$(MAKE) deploy-encrypted-pod-kind
+	@echo "✅ KBS ALLOW demo deployed! Check logs with: kubectl logs encrypted-model-inference -c model-downloader -f"
+
+demo-kbs-deny:	## Run complete KBS demo with DENY scenario  
+	@echo "🎬 Running complete KBS demo - DENY scenario"
+	@$(MAKE) deploy-kbs-production
+	@$(MAKE) kbs-policy-deny
+	@$(MAKE) build-push-downloader
+	@$(MAKE) deploy-encrypted-pod-kind
+	@echo "✅ KBS DENY demo deployed! Check logs with: kubectl logs encrypted-model-inference -c model-downloader -f"
+
+demo-reset:	## Reset demo environment and clean up all resources
+	@echo "🔄 Resetting demo environment..."
+	@$(MAKE) clean-k8s
+	@$(MAKE) clean-temp-files
+	@echo "✅ Demo environment reset complete!"
+
 help:	## This help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
