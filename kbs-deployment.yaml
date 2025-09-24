@@ -4,34 +4,38 @@ metadata:
   name: kbs-config
 data:
   kbs-config.toml: |
+    [attestation_service]
+    type = "coco_as_builtin"
+    as_url = "http://mock-attestation-service:8080"
+
+    [repository]
+    type = "file"
+    path = "/opt/confidential-containers/kbs/repository"
+
+    [policy_engine]
+    policy_type = "opa"
+    policy_path = "/etc/kbs/policy.rego"
+
     [kbs]
-    # Background Check Mode configuration
     insecure_http = true
     insecure_api = true
-    
-    [attestation_service]
-    # Mock AS endpoint for simulation
-    as_url = "http://mock-attestation-service:8080"
-    
-    [policy_engine]
-    # Simple policy for demo
-    policy_type = "opa"
-    
+    auth_public_key = "-----BEGIN PUBLIC KEY-----\\MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAsu7vnjaH2XKnXJ3VZEkC\\7kgNh4AN5Tl2yWxnrKwNfEduroKTRN6U4bWZ4xBNquaLHf/5QOKdE3/dJozZNIfo\\JTEgPPjrOzilmioiAiLHAoJVJAcE+QPOj6CXkih+w389yA90PCKPgNCJobjUVsri\\dexyoN8OnRGDjaR0D/xCbxnzlnoNqUfo1M5s+1zGAIl5jxpcFN1uO4fniiDNlbio\\UpGeu69yCXxdpIMANOelwW28oisLJumCpsfTcfBiS4gxy8icTsIv97LoJGsFfeSL\\yM45fOCaWLU28jtKx6t+3mRg3F9b4jxI5gESadOAf4quvcRCySTN2l7k4PFKOeCK\\u9ZxSLqUM3hd24lGBkcH78Jbe16zFG3F+btDpDj6fRgJABKRqZMhzMyjw79+BVGk\\EbTA4cSJafYHY1kqH293RQ/0DHR0ZLSFfjAuwrKWlswJtQwOI4vdpJWDlXeVraO5\\fJxzPZlOrXXpVXX7z0itTLybQoDK34Qt0DQyQMlpWJ4WR1u7t57WAq8MHhP4/sZ2\\j6PZQyofSzGUEiSz7TeBA4xpjyjEeZzk65G5n0uAaTZqw2ZkmbCjQ7z78AQhY5JQ\\44QU8+NfGmOkXJfb2GMaYIFkj8qLki1+jn+OkTWuPEoR/bi+eGSlfdoVn5+CvjWZ\\jJJaaxccCaBTnN7pQ+mEf/sCAwEAAQ==\\-----END PUBLIC KEY-----\\"
+
   policy.rego: |
     package policy
-    
+
     import future.keywords.if
-    
+
     # Demo policy - can be easily modified for allow/deny scenarios
     default allow := false
-    
+
     # Allow if attestation shows valid TEE (simulated)
     allow if {
         input.tee_evidence.platform == "simulated-tee"
         input.tee_evidence.security_version >= 1
         input.resource_policy.allow_access == true
     }
-    
+
     # Allow if demo mode is enabled (for easy testing)
     allow if {
         input.demo_mode == true
@@ -69,6 +73,8 @@ spec:
       containers:
       - name: kbs
         image: ghcr.io/confidential-containers/staged-images/kbs:latest
+        command: ["/usr/local/bin/kbs"]
+        args: ["--config-file", "/etc/kbs/kbs-config.toml"]
         ports:
         - containerPort: 8080
         env:
