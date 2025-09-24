@@ -11,7 +11,7 @@ import os
 from base64 import b64decode
 
 class KBSClient:
-    def __init__(self, kbs_url="http://kbs-service:8080", as_url="http://mock-attestation-service:8080"):
+    def __init__(self, kbs_url="https://kbs-service:8080", as_url="http://mock-attestation-service:8080"):
         self.kbs_url = kbs_url
         self.as_url = as_url
         self.session_id = None
@@ -71,7 +71,8 @@ class KBSClient:
             response = requests.get(
                 f"{self.kbs_url}/kbs/v0/resource/{resource_path}",
                 headers=headers,
-                timeout=10
+                timeout=10,
+                verify=False  # Disable TLS verification for self-signed certificates
             )
             
             if response.status_code == 200:

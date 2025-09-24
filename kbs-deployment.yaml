@@ -4,22 +4,28 @@ metadata:
   name: kbs-config
 data:
   kbs-config.toml: |
+    [http_server]
+    sockets = ["0.0.0.0:8080"]
+    insecure_http = false
+    private_key = "/etc/kbs/tls/key.pem"
+    certificate = "/etc/kbs/tls/cert.pem"
+    
+    [admin]
+    auth_public_key = "/etc/kbs/auth/public.pub"
+    insecure_api = false
+    
     [attestation_service]
     type = "coco_as_builtin"
     as_url = "http://mock-attestation-service:8080"
-
-    [repository]
-    type = "file"
-    path = "/opt/confidential-containers/kbs/repository"
-
+    
     [policy_engine]
     policy_type = "opa"
     policy_path = "/etc/kbs/policy.rego"
-
-    [kbs]
-    insecure_http = true
-    insecure_api = true
-    auth_public_key = "-----BEGIN PUBLIC KEY-----\\MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAsu7vnjaH2XKnXJ3VZEkC\\7kgNh4AN5Tl2yWxnrKwNfEduroKTRN6U4bWZ4xBNquaLHf/5QOKdE3/dJozZNIfo\\JTEgPPjrOzilmioiAiLHAoJVJAcE+QPOj6CXkih+w389yA90PCKPgNCJobjUVsri\\dexyoN8OnRGDjaR0D/xCbxnzlnoNqUfo1M5s+1zGAIl5jxpcFN1uO4fniiDNlbio\\UpGeu69yCXxdpIMANOelwW28oisLJumCpsfTcfBiS4gxy8icTsIv97LoJGsFfeSL\\yM45fOCaWLU28jtKx6t+3mRg3F9b4jxI5gESadOAf4quvcRCySTN2l7k4PFKOeCK\\u9ZxSLqUM3hd24lGBkcH78Jbe16zFG3F+btDpDj6fRgJABKRqZMhzMyjw79+BVGk\\EbTA4cSJafYHY1kqH293RQ/0DHR0ZLSFfjAuwrKWlswJtQwOI4vdpJWDlXeVraO5\\fJxzPZlOrXXpVXX7z0itTLybQoDK34Qt0DQyQMlpWJ4WR1u7t57WAq8MHhP4/sZ2\\j6PZQyofSzGUEiSz7TeBA4xpjyjEeZzk65G5n0uAaTZqw2ZkmbCjQ7z78AQhY5JQ\\44QU8+NfGmOkXJfb2GMaYIFkj8qLki1+jn+OkTWuPEoR/bi+eGSlfdoVn5+CvjWZ\\jJJaaxccCaBTnN7pQ+mEf/sCAwEAAQ==\\-----END PUBLIC KEY-----\\"
+    
+    [[plugins]]
+    name = "resource"
+    type = "LocalFs"
+    dir_path = "/opt/confidential-containers/kbs/repository"
 
   policy.rego: |
     package policy
@@ -70,6 +76,13 @@ spec:
       labels:
         app: kbs
     spec:
+      initContainers:
+      - name: setup-repository
+        image: busybox:1.36
+        command: ['sh', '-c', 'mkdir -p /repository && echo "Repository initialized"']
+        volumeMounts:
+        - name: kbs-secrets
+          mountPath: /repository
       containers:
       - name: kbs
         image: ghcr.io/confidential-containers/staged-images/kbs:latest
@@ -85,6 +98,10 @@ spec:
           mountPath: /etc/kbs
         - name: kbs-secrets
           mountPath: /opt/confidential-containers/kbs/repository
+        - name: kbs-tls
+          mountPath: /etc/kbs/tls
+        - name: kbs-auth
+          mountPath: /etc/kbs/auth
         resources:
           requests:
             memory: "256Mi"
@@ -97,8 +114,13 @@ spec:
         configMap:
           name: kbs-config
       - name: kbs-secrets
-        configMap:
-          name: kbs-secrets
+        emptyDir: {}
+      - name: kbs-tls
+        secret:
+          secretName: kbs-tls-certs
+      - name: kbs-auth
+        secret:
+          secretName: kbs-auth-keys
 
 ---
 apiVersion: v1
