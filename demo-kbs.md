@@ -1,16 +1,43 @@
-# KBS Attestation Demo Guide
+# KBS Attestation Demo Guide - Production Configuration
 
-This guide demonstrates the Key Broker Service (KBS) integration with configurable attestation policies for encrypted model inference.
+This guide demonstrates the Key Broker Service (KBS) integration with production-ready certificates and configurable attestation policies for encrypted model inference.
 
 ## Overview
 
 The KBS demo replaces the manual `kubectl cp` method with automatic attestation-based key retrieval. The setup includes:
 
-- **KBS (Key Broker Service)**: Manages encrypted secrets
+- **Production KBS**: HTTPS-enabled with Ed25519 auth keys and TLS certificates
 - **Mock Attestation Service**: Simulates TEE attestation with configurable allow/deny policies
-- **Enhanced Init Container**: Uses KBS client instead of waiting for manual key transfer
+- **Enhanced Init Container**: Uses HTTPS KBS client instead of waiting for manual key transfer
+- **Automated Workflow**: Complete make targets for end-to-end demo deployment
 
-## Demo Scenarios
+## Quick Start - Automated Demo
+
+### Complete ALLOW Scenario (One Command)
+```bash
+# Deploy production KBS + run successful attestation demo
+make demo-kbs-allow
+
+# Monitor the workflow
+kubectl logs encrypted-model-inference -c model-downloader -f
+```
+
+### Complete DENY Scenario (One Command)
+```bash
+# Deploy production KBS + run failed attestation demo
+make demo-kbs-deny
+
+# Monitor the workflow
+kubectl logs encrypted-model-inference -c model-downloader -f
+```
+
+### Reset Environment
+```bash
+# Clean up everything and reset
+make demo-reset
+```
+
+## Manual Demo Scenarios
 
 ### Scenario 1: Successful Attestation (ALLOW)
 ```bash
@@ -18,7 +45,7 @@ The KBS demo replaces the manual `kubectl cp` method with automatic attestation-
 make kbs-policy-allow
 
 # Deploy pod - will succeed in getting the key
-make deploy-encrypted-pod
+make deploy-encrypted-pod-kind
 ```
 
 ### Scenario 2: Failed Attestation (DENY) 
@@ -27,15 +54,32 @@ make deploy-encrypted-pod
 make kbs-policy-deny
 
 # Deploy pod - will fail to get the key
-make deploy-encrypted-pod
+make deploy-encrypted-pod-kind
 ```
 
 ## Complete Demo Workflow
 
-### 1. Setup Infrastructure
+### 1. Setup Production Infrastructure
+
+**Quick Setup (Recommended):**
 ```bash
 # Start kind cluster and registry
 make kind
+
+# Deploy production KBS with certificates and authentication
+make deploy-kbs-production
+```
+
+**Manual Step-by-Step Setup:**
+```bash
+# Start kind cluster and registry
+make kind
+
+# Generate secure certificates (Ed25519 auth + RSA TLS)
+make gen-kbs-certs
+
+# Create Kubernetes secrets for certificates
+make setup-kbs-secrets
 
 # Deploy KBS infrastructure
 make deploy-kbs
@@ -146,9 +190,30 @@ make deploy-kbs
 make populate-kbs-secrets
 ```
 
+## Production Features
+
+### Security Configuration
+- **HTTPS Communication**: TLS 1.3 with 4096-bit RSA certificates
+- **Ed25519 Authentication**: Modern elliptic curve cryptography for auth keys
+- **Secure Key Storage**: Private keys with proper file permissions (600)
+- **Certificate Management**: Automated generation and Kubernetes secret integration
+
+### Architecture
+- **Background Check Mode**: Production-ready attestation service integration
+- **OPA Policy Engine**: Open Policy Agent for flexible policy management
+- **LocalFs Plugin**: Secure local file system storage for secrets
+- **Service Mesh Ready**: HTTPS endpoints suitable for service mesh integration
+
+### Automation
+- **One-Command Demos**: Complete workflow automation with `make demo-kbs-*`
+- **Certificate Generation**: Automated Ed25519 and RSA certificate creation
+- **Secret Management**: Automatic Kubernetes secret provisioning
+- **Environment Reset**: Complete cleanup with `make demo-reset`
+
 ## Security Notes
 
-- **Demo Mode**: Current setup uses simulated attestation for demonstration
-- **Policy Flexibility**: Easy switching between allow/deny for storyline demos
+- **Production Ready**: HTTPS, proper authentication, and secure certificate management
+- **Demo Mode**: Simulated attestation with realistic TEE evidence structure
+- **Policy Flexibility**: Easy switching between allow/deny for storyline demos  
 - **Vendor Ready**: Architecture supports replacing mock components with real attestation
-- **TEE Simulation**: Generates realistic evidence structure for testing
+- **Certificate Rotation**: New certificates generated for each deployment
