@@ -144,13 +144,6 @@ spec:
             port: 8080
           initialDelaySeconds: 5
           periodSeconds: 5
-      initContainers:
-      - name: install-deps
-        image: python:3.11-slim
-        command: ["pip", "install", "flask"]
-        volumeMounts:
-        - name: pip-cache
-          mountPath: /root/.cache/pip
       volumes:
       - name: app-code
         configMap:
@@ -162,5 +155,3 @@ spec:
       - name: config
         configMap:
           name: mock-as-config
-      - name: pip-cache
-        emptyDir: {}
