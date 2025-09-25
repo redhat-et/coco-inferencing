@@ -250,16 +250,20 @@ deploy-kbs:	## Deploy KBS and mock attestation service
 	@echo "Deploying KBS infrastructure..."
 	@kubectl apply -f mock-attestation-service.yaml
 	@kubectl apply -f kbs-deployment.yaml
-	@echo "Waiting for services to be ready..."
-	@kubectl wait --for=condition=ready pod -l app=mock-attestation-service --timeout=60s
-	@kubectl wait --for=condition=ready pod -l app=kbs --timeout=60s
 	@echo "✅ KBS infrastructure deployed successfully!"
+	@echo "Note: KBS pods will start after secrets are populated with populate-kbs-secrets"
 
 populate-kbs-secrets:	## Populate KBS with private key
 	@echo "Populating KBS with private key..."
 	@kubectl create configmap kbs-secrets --from-file=private.key=private.pem --dry-run=client -o yaml | kubectl apply -f -
 	@kubectl rollout restart deployment/kbs
 	@echo "✅ KBS secrets populated and restarted!"
+
+wait-for-kbs:	## Wait for KBS services to be ready
+	@echo "Waiting for KBS services to be ready..."
+	@kubectl wait --for=condition=ready pod -l app=mock-attestation-service --timeout=60s
+	@kubectl wait --for=condition=ready pod -l app=kbs --timeout=60s
+	@echo "✅ KBS services are ready!"
 
 kbs-policy-allow:	## Set attestation policy to ALLOW access
 	@echo "Setting attestation policy to ALLOW..."
@@ -329,6 +333,7 @@ deploy-kbs-production:	## Deploy production KBS with proper certificates and att
 	@$(MAKE) setup-kbs-secrets
 	@$(MAKE) deploy-kbs
 	@$(MAKE) populate-kbs-secrets
+	@$(MAKE) wait-for-kbs
 	@echo "✅ Production KBS deployment complete!"
 
 demo-kbs-allow:	## Run complete KBS demo with ALLOW scenario
