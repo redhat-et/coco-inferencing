@@ -87,13 +87,16 @@ make deploy-kbs
 # Populate KBS with private key
 make populate-kbs-secrets
 
+# Wait for KBS services to be ready
+make wait-for-kbs
+
 # Build and push updated downloader container
 make build-push-downloader
 ```
 
 ### 2. Demo: Successful Access
 ```bash
-# Configure policy to allow access
+# Configure policy to allow access (default)
 make kbs-policy-allow
 
 # Deploy the inference pod (for Kind cluster)
